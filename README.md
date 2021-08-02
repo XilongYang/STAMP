@@ -1,82 +1,115 @@
-# STAMP Demo
-
-## 简介
-
-一个基于Qt5和Unix平台的STAMP的不完全实现。
-
-实现的功能：
-
-* 无验证模式下的性能测试
-* 验证模式下的性能测试
-* 有状态模式的性能测试
-* HMAC-SHA256加密算法
-* 可选择UDP端口的服务器
-* 可选择目标IP与端口的图形化客户端
-* 生成NTP格式的时间戳
-
-未实现功能：
-
-* 获取IP数据报的TTL
-
-项目分为三个部分：STAMP-Protocl、STAMP-Client、STAMP-Server。
-
-## 组成
-
-### STAMP-Protocol部分
-
-一个由STAMP-Client和STAMP-Server共用的库，包括以下设施：
-
-* Packet类：为以uint8_t数组存储的数据提供简单的封装，维护一个size，并控制指针生命周期。
-  * 可以使用get()方法获取内部指针，但不要自行对指针进行new与delete。
-  * 需要变更Packet大小时，使用拷贝或移动一个新Packet的方式，Packet的析构函数会自动释放内存。
-* big_endian()函数，判断机器的字节序，大端返回true，小端返回false。
-* hwswitch()模板，对一个任意长度数字类型的字节序进行变换。
-* hton_any()模板，对一个任意长度的机器字节序数字类型，返回其网络字节序表示。
-* ntoh_any()模板，对一个任意长度的网络字节序数字类型，返回其机器字节序表示。
-* sha256()函数，接收一个Packet，以一个size为32的Packet返回其信息摘要。
-* hmac_sha256()函数，接收一个Packet，以一个size为32的Packet返回其信息摘要。
-
-STAMP-Protocol将构建为一个静态库，以供其它程序使用。
-
-### STAMP-Server部分
-
-一个Qt console程序，通过config.h进行配置。
-
-```c++
-// 开关验证模式
-constexpr bool auth_mode = true;
-// 设置密钥，仅在验证模式下有效
-constexpr char key_str[] = "123456";
-// 设置端口,STAMP的默认端口为862，但为了开发测试方便使用了2233。
-constexpr int port = 2233;
-// 开关状态模式
-constexpr bool state_mode = false;
-```
-
-更改配置后重新编译运行可使配置生效。
-
-STAMP-Server会持续监听指定端口，并对接收到的数据包进行以下处理：
-
-* 验证数据包，通过error estimate区域与hmac区域进行验证。
-  * 对于未通过验证的数据包，返回一个Packet，内容为"Varlify Failed"。
-* 对于通过验证的数据包，构造并返回对应的返回包。
-
-### STAMP-Client部分
-
-STAMP-Client提供了一个图形界面，可以方便地进行各种选项的配置。其行为是:
-
-* 根据配置构造一个发送包并发送至指定地址和端口
-* 监听发送时使用的端口等待回应
-  * 超时则放弃这个包，继续运行。
-* 根据接收到的返回包计算时延和丢包情况。
+# STAMP协议——C++实现
 
 ## 构建
 
-1. 使用Qt Creator构建出STAMP-Protocol
-2. 使用Qt Creator打开STAMP-Server和STAMP-Client，并将已构建好的STAMP-Protocol作为库添加进工程配置文件
-3. 构建STAMP-Client和STAMP-Server
+```bash
+mkdir build
+cd build
+cmake .. .
+make
+```
 
-## 运行截图
+## STAMP简介
 
-![image-20210617212651133](Doc/Images/image-20210617212651133.png)
+STAMP是Simple Two-Way Active Measurement Protocol的简写，此协议实现了对单向和往返性能指标——比如延迟，延迟变化和丢包——的测试。
+
+目前已存在的测试协议有OWAMP(One-Way Active Measurement Protocol)和在其基础上发展而来的TWAMP(Two-Way Active Measurement Protocol)。在很多情况下，实现一个TWAMP太过复杂，因而一个更轻量级的协议——TWAMP Light应运而生。
+
+但很多实际应用表明，在TWAMP Light中实现交互是很困难的。因为TWAMP Light的组成和行为并没有明确的规定。规定仅要求TWAMP Light包括一个TWAMP-Test测试功能的子集，因此要想实现一个全面的测试协议还需要其它提供了控制功能和安全措施的应用提供支持。
+
+STAMP正是在这种背景下诞生的。
+
+## STAMP的工作原理
+
+### 基本原理
+
+下图表示了STAMP一个测试会话中的发送者(Session-Sender)和接收者(Session-Reflector)。在这里，测试会话（也称为STAMP会话）是一段时间内一个特定的发送者和接收者间的双向包流。
+
+![image-20210526144840744](Images/image-20210526144840744.png)
+
+发送者通过UDP传输测试数据包给接收者，接收者收到数据包后进行处理。接收者有两种运行方式：
+
+* 无状态模式：
+
+  接收者不维护测试状态，并且使用接收包的顺序字作为返回包的顺序字。在无状态模式下，接收包和返回包的顺序字相同，并且只能计算往返丢包。
+
+* 有状态模式：
+
+  接收者维护测试状态，因此允许发送者通过鉴别递增字直接确定丢包情况。有状态模式下任何丢包都可以计算。这要求接收者必须维护每个测试会话的状态，以使每个测试数据包唯一地对应一个测试会话实例，并且让递增字能够在每个会话的基础上独立地递增。
+
+STAMP支持两种验证模式：无验证模式和验证模式。
+
+STAMP使用UDP协议862端口（TWAMP-Test Receiver 端口）作为默认端口。STAMP的实现支持在User Ports和Dynamic Ports中定义使用的端口。
+
+### 包格式
+
+STAMP定义了两种不同的测试包格式：一种由发送者发送，另一种由接收者发送。STAMP使用对称的包，但一个由接收者返回的包要附带相关信息，因此比较大。为了确保包的对称性，发送者发出的包要包含MBZ(Must Be Zero)区域以匹配返回包的大小。
+
+#### 无验证模式的发送包
+
+![image-20210526150444630](Images/image-20210526150444630.png)
+
+各区域定义如下：
+
+* 顺序字(Sequence Number)区域4字节长。对每个新会话，它的值从0开始并且每次传输加1。
+
+* 时间戳(Timestamp)区域8字节长。STAMP必须支持NTPv4格式，可能支持PTPv2格式。
+
+* 误差估计(Error Estimate)区域2字节长，并拥有如下格式：
+
+  ![image-20210518163754693](Images/image-20210518163754693.png)
+
+  S，Scale和Multiplier区域：
+
+  S位， 当本方使用了用其它源同步UTC的时钟生成时间戳时**应该**设为1，否则设为0。
+
+  Scale和Multipliter都是无符号的整数，并满足此关系： error estimate
+  is equal to Multiplier*2^(-32)*2^Scale (in seconds)，这两个值应该是每个机器自行设定的，但Multipliter不可设为0。
+
+  Z区域：
+
+  0: NTP64位时间戳格式
+
+  1: PTPv2 缩短64位时间戳格式
+
+  STAMP默认使用NTP64位时间戳格式（Z的值为0）。
+
+* MBZ区域。它在传输时每一位必须为0并且在接收时必须被忽略。
+
+#### 无验证模式的返回包
+
+![image-20210526150522844](Images/image-20210526150522844.png)
+
+各区域定义如下：
+
+* 顺序字区域4字节长。其值取决于接收者的模式：
+  * 在无状态模式下，顺序字的值是收到的测试包顺序字的拷贝。
+  * 在有状态模式下，接收者对接收到的测试包计数。对每个测试会话，这个数从0开始，并且每接收到一个包就加1。
+* 时间戳和接收时间戳（Receive Timestamp）区域都是8字节长。格式可以为NTP格式或PTPv2格式，通过误差估计区域的Z值进行确定。接收时间戳是接收到包的时间，时间戳是开始发送包的时间。
+* 误差估计区域的定义和发送包相同。
+* 发送者相关区域由接收到的包复制而来。
+* TTL区域1字节长，由IPv4包的TTL区域复制而来。
+* MBZ区域保证了包大小是4字节的倍数。
+
+#### 验证模式下的包
+
+* 发送包
+
+![image-20210521170453086](Images/image-20210521170453086.png)
+
+* 返回包
+
+![image-20210521172825542](Images/image-20210521172825542.png)
+
+验证模式通过添加哈希化消息验证码（HMAC）为每个STAMP消息提供保护。STAMP使用HMAC-SHA-256缩减128字节算法；因而，HMAC区域的大小是16字节。HMAC覆盖开始的6个区块（96字节）。HMAC使用自己的密钥，每个STAMP-Test Session的密钥各不相同。未来的标准可能会定义更高级的算法。
+
+## 参考文档
+
+RFC8762: G. Mirsky , G. Jun, H. Nydell, R. Foote - "Simple Two-Way Active Measurement Protocol"
+
+RFC6038: A. Morton and L. Ciavattone - "Two-Way Active Measurement Protocol (TWAMP) Reflect Octets and Symmetrical Size Features"
+
+RFC5357: K. Hedayat, R. Krzanowski, A. Morton, K. Yum, J. Babiarz - "A Two-Way Active Measurement Protocol (TWAMP)"
+
+RFC4656: S. Shalunov, B. Teitelbaum, A. Karp, J. Boote, M. Zekauskas - "A One-way Active Measurement Protocol (OWAMP)"
 
