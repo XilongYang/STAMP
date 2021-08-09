@@ -47,8 +47,8 @@ namespace stamp {
         byte_t *get();
         const byte_t *get() const;
 
-        // 打印内部字节，每n个字节换一行
-        void show(size_t n) const;
+        // 打印内部字节，每n个字节换一行, n的默认值为4
+        void show(size_t n = 4) const;
      private:
         size_t  size_;
         byte_t* data_;

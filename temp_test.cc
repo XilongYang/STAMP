@@ -8,6 +8,6 @@ int main() {
     stamp::Bytes msg("Hello");
     stamp::Bytes key("abc");
     auto hm = stamp::hmac(msg, key, stamp::sha256);
-    hm.show(4);
+    hm.show();
     return 0;
 }

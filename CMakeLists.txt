@@ -6,6 +6,7 @@ include_directories(${CMAKE_SOURCE_DIR}/utils)
 
 aux_source_directory(utils UTILS)
 
-set(SOURCES main.cc ${UTILS})
+set(SOURCES temp_test.cc ${UTILS})
 
 add_executable(STAMP ${SOURCES})
+
