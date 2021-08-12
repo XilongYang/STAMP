@@ -61,8 +61,8 @@ namespace stamp {
     template <typename T>
     Bytes get_bytes(const T &input) {
         constexpr size_t size = sizeof(T);
-        auto data = reinterpret_cast<const char*>(&input);
-        return Bytes(data, size);
+        auto data = reinterpret_cast<const byte_t*>(&input);
+        return Bytes(size, data, size);
     }
 
     // 将一个值的字节序在本地序和网络序之间转换。

@@ -95,6 +95,7 @@ namespace stamp{
                 std::cout << std::endl;
             }
         }
+        std::cout << std::dec << std::setw(0) << std::endl;
     }
 
     void Bytes::copy(const Bytes &bytes) {
