@@ -5,7 +5,9 @@
 #include "timestamp.h"
 
 #include <unistd.h>
+#include <netdb.h>
 #include <stdexcept>
+#include <string>
 
 #ifdef __linux__
 static constexpr unsigned recv_type = IP_TTL;
@@ -14,29 +16,49 @@ static constexpr unsigned recv_type = IP_RECVTTL;
 #endif
 
 namespace stamp{
-    // 对socket进行简单的封装，以管理生命周期。
-    class UdpSocket {
-    public:
-        UdpSocket() : socket_(socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) {}
-        ~UdpSocket() {
-            close(socket_);
+    namespace {
+        // 对socket进行简单的封装，以管理生命周期。
+        class UdpSocket {
+        public:
+            UdpSocket() : socket_(socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) {}
+            ~UdpSocket() {
+                close(socket_);
+            }
+            UdpSocket(const UdpSocket&) = delete;
+            UdpSocket(UdpSocket&&) = delete;
+            int get() const {
+                return socket_;
+            }
+        private:
+            int socket_;
+        };
+
+        // 试图从字符串中解析出地址，失败时抛出异常
+        sockaddr_in parse_address(const char* address) {
+            addrinfo hint{};
+            hint.ai_flags = AI_CANONNAME;
+
+            int err;
+            addrinfo *ailist;
+            if ((err = getaddrinfo(address, nullptr, &hint, &ailist)) != 0) {
+                throw std::runtime_error(gai_strerror(err));
+            }
+
+            for (addrinfo *aip = ailist; aip != nullptr; aip = aip->ai_next) {
+                if (aip->ai_family == AF_INET) {
+                    sockaddr_in *sinp = (sockaddr_in*)aip->ai_addr;
+                    return *sinp;
+                }
+            }
+            throw std::runtime_error("No such address.");
         }
-        UdpSocket(const UdpSocket&) = delete;
-        UdpSocket(UdpSocket&&) = delete;
-        int get() const {
-            return socket_;
-        }
-    private:
-        int socket_;
-    };
+    }
 
     Bytes send_packet(const char* address, uint16_t port
                       , const SendPacketGenerator &packet_generator) {
         UdpSocket send_socket;
 
-        sockaddr_in addr{};
-        addr.sin_family = AF_INET;
-        inet_pton(AF_INET, address, reinterpret_cast<void*>(&addr.sin_addr.s_addr));
+        sockaddr_in addr = parse_address(address);
         addr.sin_port = hnswitch(port);
 
         Bytes send_packet = packet_generator();
@@ -105,9 +127,6 @@ namespace stamp{
         Bytes received_packet(receive_size, buf, receive_size);
 
         sockaddr from = *reinterpret_cast<sockaddr*>(&src_addr);
-
-        sockaddr_in from_in = *reinterpret_cast<sockaddr_in*>(&src_addr);
-        char return_buf[100];
 
         Bytes return_packet = packet_generator(ttl, received_packet
                                                , receive_timestamp);

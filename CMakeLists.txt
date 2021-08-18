@@ -2,14 +2,16 @@ cmake_minimum_required(VERSION 3.1)
 
 project (STAMP)
 
-include_directories(${CMAKE_SOURCE_DIR}/utils ${CMAKE_SOURCE_DIR}/protocols)
+include_directories(${CMAKE_SOURCE_DIR}/stamp-library)
 
-aux_source_directory(utils UTILS)
-aux_source_directory(protocols PROTOCOL)
+aux_source_directory(stamp-library STAMP)
 
-set(SOURCES ${UTILS} ${PROTOCOL})
+add_library(stamp ${STAMP})
 
-add_executable(stamp-client stamp-client/stamp-client.cc ${SOURCES})
-add_executable(stamp-server stamp-server/stamp-server.cc ${SOURCES})
+add_executable(stamp-client stamp-client/stamp-client.cc)
+add_dependencies(stamp-client stamp)
+target_link_libraries(stamp-client stamp)
 
-add_executable(temp_test temp_test.cc ${SOURCES})
+add_executable(stamp-server stamp-server/stamp-server.cc)
+add_dependencies(stamp-server stamp)
+target_link_libraries(stamp-server stamp)

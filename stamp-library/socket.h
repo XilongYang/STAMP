@@ -13,7 +13,7 @@
 #include <functional>
 
 namespace stamp {
-    // 将返回Bytes的可调用对象作为包生成器类型。
+    // 将返回Bytes对象的可调用对象作为包生成器类型。
     using SendPacketGenerator = std::function<Bytes()>;
     using RecvPacketGenerator = std::function<Bytes(uint8_t ttl, const Bytes &receive_packet
                                                     , const Timestamp &receive_timestamp)>;
