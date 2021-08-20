@@ -5,8 +5,7 @@
 
 #include "bytes.h"
 
-#include <arpa/inet.h>
-#include <memory>
+#include <netinet/in.h>
 
 namespace stamp {
     // 对UDP socket进行简单封装，以管理生命周期。
