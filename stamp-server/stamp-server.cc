@@ -14,12 +14,16 @@ int main(int argc, char** argv) {
         cout << "Usage: stamp-server [port]" << endl;
         return -1;
     }
-    while (true) {
-        auto re = stamp::receive_packet(std::stoi(argv[1]), [](uint32_t ttl, const stamp::Bytes& receive_packet
-                , const stamp::Timestamp &receive_timestamp){
-            return stamp::get_bytes(stamp::UnauthReflectorPacket(0, receive_timestamp, ttl, receive_packet));
-        });
-        re.show();
+    stamp::UdpSocket sock;
+    stamp::bind(sock, 20223);
+    for(;;) {
+        sockaddr_in addr;
+        uint8_t ttl;
+        auto recv = stamp::receive_packet(sock, &addr, &ttl);
+        recv.show();
+        auto recv_timestamp = stamp::hnswitch(stamp::get_timestamp());
+        auto data = stamp::get_bytes(stamp::UnauthReflectorPacket(0, recv_timestamp, ttl, recv));
+        stamp::send_packet(addr, data, sock);
     }
     return 0;
 }

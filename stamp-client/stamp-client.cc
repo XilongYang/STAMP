@@ -9,6 +9,7 @@
 
 using std::cout;
 using std::endl;
+using std::stoi;
 
 int main(int argc, char** argv) {
     if (argc != 3) {
@@ -16,11 +17,16 @@ int main(int argc, char** argv) {
         return -1;
     }
 
-    auto re = stamp::send_packet(argv[1], std::stoul(argv[2])
-                                 , []() {
-        return stamp::get_bytes(stamp::UnauthSenderPacket(0));
-    });
+    auto addr = stamp::parse_address(argv[1]);
+    addr.sin_port = stamp::hnswitch<uint16_t>(20223);
 
-    re.show();
+    char buf[INET_ADDRSTRLEN];
+    auto sock = stamp::UdpSocket();
+    auto data = stamp::get_bytes(stamp::UnauthSenderPacket(0));
+
+    stamp::send_packet(addr, data, sock);
+
+    auto recv_data = stamp::receive_packet(sock);
+    recv_data.show();
     return 0;
 }

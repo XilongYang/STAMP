@@ -4,26 +4,38 @@
 #define STAMP_SOCKET_H
 
 #include "bytes.h"
-#include "timestamp.h"
 
-#include <sys/socket.h>
-#include <netinet/in.h>
 #include <arpa/inet.h>
-
-#include <functional>
+#include <memory>
 
 namespace stamp {
-    // 将返回Bytes对象的可调用对象作为包生成器类型。
-    using SendPacketGenerator = std::function<Bytes()>;
-    using RecvPacketGenerator = std::function<Bytes(uint8_t ttl, const Bytes &receive_packet
-                                                    , const Timestamp &receive_timestamp)>;
+    // 对UDP socket进行简单封装，以管理生命周期。
+    // 不支持拷贝与移动操作。
+    class UdpSocket {
+    public:
+        UdpSocket();
+        ~UdpSocket();
+        UdpSocket(const UdpSocket&) = delete;
+        UdpSocket(UdpSocket&&) = delete;
+        int get() const;
+    private:
+        int socket_;
+    };
 
-    // 向指定地址发送func生成的包类型，并从该地址接收到返回包。
-    Bytes send_packet(const char* address, uint16_t port
-                      , const SendPacketGenerator &packet_generator);
+    // 试图从字符串中解析出地址，失败时抛出异常。
+    sockaddr_in parse_address(const char* address);
 
-    // 接受port端口收到的包，并使用func生成一个包返回。
-    Bytes receive_packet(uint16_t port, const RecvPacketGenerator &packet_generator);
+    // 使用send_socket向指定地址发送data, 失败时抛出异常。
+    void send_packet(sockaddr_in address, const Bytes& data, const UdpSocket &send_socket);
+
+    // 将socket与本机指定端口绑定。
+    void bind(const UdpSocket &bind_socket, uint16_t port);
+
+    // 使用recv_socket接受port端口收到的包，
+    // 使用参数address保存源地址,
+    // 使用参数ttl保存接收到的packet的ip头部分的ttl。
+    Bytes receive_packet(const UdpSocket &recv_socket, sockaddr_in *address = nullptr
+            , uint8_t *ttl = nullptr);
 }
 
 
