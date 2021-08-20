@@ -21,7 +21,7 @@ int main(int argc, char** argv) {
     addr.sin_port = stamp::hnswitch<uint16_t>(20223);
 
     char buf[INET_ADDRSTRLEN];
-    auto sock = stamp::UdpSocket();
+    stamp::UdpSocket sock;
     auto data = stamp::get_bytes(stamp::UnauthSenderPacket(0));
 
     stamp::send_packet(addr, data, sock);
