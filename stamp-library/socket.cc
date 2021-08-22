@@ -7,8 +7,7 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <netdb.h>
-#include <stdexcept>
-#include <string>
+#include <csignal>
 
 // 表示TTL的常量, linux使用的是IP_TTL, 而其它Unix使用的是IP_RECVTTL。
 #ifdef __linux__
@@ -36,7 +35,7 @@ namespace stamp{
         int err;
         addrinfo *ailist;
         if ((err = getaddrinfo(address, nullptr, &hint, &ailist)) != 0) {
-            throw std::runtime_error(gai_strerror(err));
+            throw addrinfo_error(gai_strerror(err));
         }
 
         for (addrinfo *aip = ailist; aip != nullptr; aip = aip->ai_next) {
@@ -45,14 +44,13 @@ namespace stamp{
                 return *sinp;
             }
         }
-        throw std::runtime_error("No such address.");
+        throw addrinfo_error("No such address.");
     }
 
     void send_packet(sockaddr_in address, const Bytes& data, const UdpSocket &send_socket) {
         if (-1 == sendto(send_socket.get(), data.get(), data.size(), 0
                          , reinterpret_cast<sockaddr*>(&address), sizeof(address))) {
-            perror("Error while send message: ");
-            throw std::runtime_error("Error while send message.");
+            throw send_error("Error while send message.");
         }
     }
 
@@ -66,11 +64,18 @@ namespace stamp{
         // 将socket与指定地址绑定。
         if (-1 == bind(bind_socket.get(), reinterpret_cast<sockaddr*>(&addr)
                 , sizeof(addr))) {
-            throw std::runtime_error("Error while binding address");
+            throw bind_error("Error while binding address");
         }
     }
 
-    Bytes receive_packet(const UdpSocket &recv_socket
+    namespace {
+        // 处理计时器信号，抛出异常
+        void timeout_signal(int) {
+            throw recv_timeout("Timeout");
+        }
+    }
+
+    Bytes receive_packet(const UdpSocket &recv_socket, uint32_t timeout
                          ,sockaddr_in* address, uint8_t *ttl) {
         // 打开接收ttl选项。
         int yes = 1;
@@ -96,11 +101,20 @@ namespace stamp{
                 .msg_controllen = sizeof(ctrl_data_buf)
         };
 
+        // 设置超时信号捕捉
+        signal(SIGALRM, timeout_signal);
+        alarm(timeout);
+
         // 使用recvmsg接收数据，并保存在hdr中。
         size_t receive_size;
         if (-1 == (receive_size = recvmsg(recv_socket.get(), &hdr, 0))) {
-            throw std::runtime_error("Error while receiving message.");
+            // 清空计时器
+            alarm(0);
+            throw recv_error("Error while receiving message.");
         }
+
+        // 清空计时器
+        alarm(0);
 
         // 保存源地址信息
         if (address != nullptr) {

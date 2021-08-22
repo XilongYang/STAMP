@@ -48,6 +48,7 @@ namespace stamp {
         const byte_t *get() const;
 
         // 打印内部字节，每n个字节换一行, n的默认值为4
+        // 当n为0时不换行
         void show(size_t n = 4) const;
      private:
         size_t  size_;

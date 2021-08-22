@@ -19,7 +19,7 @@ int main(int argc, char** argv) {
     for(;;) {
         sockaddr_in addr;
         uint8_t ttl;
-        auto recv = stamp::receive_packet(sock, &addr, &ttl);
+        auto recv = stamp::receive_packet(sock,0, &addr, &ttl);
         recv.show();
         auto recv_timestamp = stamp::hnswitch(stamp::get_timestamp());
         auto data = stamp::get_bytes(stamp::UnauthReflectorPacket(0, recv_timestamp, ttl, recv));

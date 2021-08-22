@@ -91,7 +91,7 @@ namespace stamp{
         for (size_t i = 0; i < size_; ++i) {
             std::cout << std::hex << std::setw(2)
             << std::setfill('0') << static_cast<uint32_t>(data_[i]) << ' ';
-            if ((i + 1) % n == 0) {
+            if (n > 0 && (i + 1) % n == 0) {
                 std::cout << std::endl;
             }
         }
