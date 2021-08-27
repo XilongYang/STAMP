@@ -6,37 +6,52 @@
 #include <iostream>
 #include <string>
 
-using std::cout;
-using std::endl;
-using std::stoi;
-
-
 int main(int argc, char** argv) {
-//    const char* short_options = "pP:c:";
-//    option long_options[] = {
-//            {"passwd", no_argument, NULL, 'p'},
-//            {"port", required_argument, NULL, 'P'},
-//            {"count", required_argument, NULL, 'c'},
-//            {0, 0, 0, 0}
-//    };
-//    int opt;
-//    int option_index = 0;
-//    while((opt = getopt_long(argc, argv, short_options, long_options, &option_index)) != -1) {
-//        cout << "opt = " << static_cast<char>(opt) << "    ";
-//        if (optarg) {
-//            cout << "optarg = " << optarg << "    ";
-//        }
-//        cout << "optind = " << optind << "    ";
-//        cout << "argv[optind - 1]= " << argv[optind - 1] << "    ";
-//        cout << "option_index= " << option_index << endl;
-//    }
+    const char* short_options = "pP:c:";
+    option long_options[] = {
+            {"passwd", no_argument, NULL, 'p'},
+            {"port", required_argument, NULL, 'P'},
+            {"count", required_argument, NULL, 'c'},
+            {0, 0, 0, 0}
+    };
 
-    SessionSender sender(20223);
+    SessionSender sender;
 
-    auto result = sender.start_session("127.0.0.1");
+    int opt;
+    while((opt = getopt_long(argc, argv, short_options, long_options, nullptr)) != -1) {
+        switch (opt) {
+            case 'c':
+                if (optarg == nullptr) {
+                    std::cerr << "Usage: stamp-client [-c count -P port -p] address." << std::endl;
+                    return -1;
+                }
+                sender.count_ = std::stoul(optarg);
+                break;
+            case 'P':
+                if (optarg == nullptr) {
+                    std::cerr << "Usage: stamp-client [-c count -P port -p] address." << std::endl;
+                    return -1;
+                }
+                sender.port_ = std::stoi(optarg);
+                break;
+            case 'p':
+                sender.set_auth_mode(true);
+                break;
+            default:
+                return -1;
+        }
+    }
 
-    cout << result.time.front() << endl;
-    cout << result.packet_lose << endl;
+    if (argc - 1 != optind) {
+        std::cerr << "Usage: stamp-client [-c count -P port -p] address." << std::endl;
+        return -1;
+    }
+
+    auto result = sender.start_session(argv[optind]);
+    for (auto t : result.time) {
+        std::cout << t << std::endl;
+    }
+    std::cout << result.packet_lose << std::endl;
 
     return 0;
 }

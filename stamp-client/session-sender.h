@@ -34,7 +34,7 @@ private:
     stamp::UdpSocket socket_;
     stamp::Bytes key_;
 
-    uint64_t time_diff(const stamp::Bytes& data);
+    uint64_t time_diff(const stamp::Bytes& receive_data);
 };
 
 #endif //STAMP_SESSIONSENDER_H
